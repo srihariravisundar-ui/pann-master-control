@@ -4,74 +4,18 @@ const WEB3_CONFIG = {
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
     
-    // Official 9 Layers mapped directly from Pradeep Kumar's Async Art JSON metadata
     layers: [
-        { 
-            id: 0, 
-            name: "Strings", 
-            jsonId: 1, 
-            tokenId: 4285, 
-            variants: ["Bright", "Dark", "Ambient"] 
-        },
-        { 
-            id: 1, 
-            name: "Winds", 
-            jsonId: 2, 
-            tokenId: 4286, 
-            variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] 
-        },
-        { 
-            id: 2, 
-            name: "Ambience", 
-            jsonId: 3, 
-            tokenId: 4287, 
-            variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] 
-        },
-        { 
-            id: 3, 
-            name: "Rhythm", 
-            jsonId: 4, 
-            tokenId: 4288, 
-            variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] 
-        },
-        { 
-            id: 4, 
-            name: "Traditional", 
-            jsonId: 5, 
-            tokenId: 4289, 
-            variants: ["Sarangi", "Veena", "Slide Guitar - Live"] 
-        },
-        { 
-            id: 5, 
-            name: "Voices", 
-            jsonId: 6, 
-            tokenId: 4290, 
-            variants: ["Solo", "Folk voice", "Choir"] 
-        },
-        { 
-            id: 6, 
-            name: "Guitars", 
-            jsonId: 7, 
-            tokenId: 4291, 
-            variants: ["Acoustic", "Electric"] 
-        },
-        { 
-            id: 7, 
-            name: "Keys", 
-            jsonId: 8, 
-            tokenId: 4292, 
-            variants: ["Piano", "Mallet - Live"] 
-        },
-        { 
-            id: 8, 
-            name: "Electronic", 
-            jsonId: 9, 
-            tokenId: 4293, 
-            variants: ["Synth & Bass", "Modular", "Live reactive layer"] 
-        }
+        { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
+        { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
+        { id: 2, name: "Ambience", tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
+        { id: 3, name: "Rhythm", tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
+        { id: 4, name: "Traditional", tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
+        { id: 5, name: "Voices", tokenId: 4290, variants: ["Solo", "Folk voice", "Choir"] },
+        { id: 6, name: "Guitars", tokenId: 4291, variants: ["Acoustic", "Electric"] },
+        { id: 7, name: "Keys", tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
+        { id: 8, name: "Electronic", tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live reactive layer"] }
     ],
 
-    // Async Art V2 ERC-721 & Control Token ABI
     abi: [
         "function ownerOf(uint256 tokenId) view returns (address)",
         "function useControlToken(uint256 tokenId, uint256 variantId) external",
@@ -85,6 +29,7 @@ let userAddress = null;
 
 const connectWalletBtn = document.getElementById('connect-wallet-btn');
 const dashboard = document.getElementById('layers-dashboard');
+const mixContainer = document.getElementById('mix-tags-container');
 const toast = document.getElementById('toast');
 
 function showToast(message, type = 'success') {
@@ -95,26 +40,70 @@ function showToast(message, type = 'success') {
     }, 4000);
 }
 
+async function fetchLiveMixState() {
+    try {
+        if (!provider) {
+            provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
+        }
+        const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
+        
+        mixContainer.innerHTML = '';
+        
+        for (const layer of WEB3_CONFIG.layers) {
+            let activeVariantIndex = 0;
+            try {
+                const res = await contract.getControlToken(layer.tokenId);
+                activeVariantIndex = Number(res);
+            } catch (e) {
+                // Fallback default if uninitialized
+                activeVariantIndex = 0;
+            }
+
+            const variantName = layer.variants[activeVariantIndex] || `Variant ${activeVariantIndex}`;
+            
+            const pill = document.createElement('div');
+            pill.className = 'mix-pill';
+            pill.innerHTML = `
+                <span class="stem-name">${layer.name}:</span>
+                <span class="stem-variant">${variantName}</span>
+            `;
+            mixContainer.appendChild(pill);
+        }
+    } catch (err) {
+        console.warn('Could not fetch live mix state:', err);
+        mixContainer.innerHTML = '<span class="mix-tag-loading">Unable to fetch live mix from RPC.</span>';
+    }
+}
+
 async function initDashboard(connectedAddress = null) {
     dashboard.innerHTML = '';
-    
+    await fetchLiveMixState();
+
+    if (!provider) {
+        provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
+    }
+    const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
+
     for (const layer of WEB3_CONFIG.layers) {
         let isOwned = false;
+        let activeVariantIndex = 0;
+
+        // Fetch active on-chain variant index
+        try {
+            const res = await contract.getControlToken(layer.tokenId);
+            activeVariantIndex = Number(res);
+        } catch (e) {
+            activeVariantIndex = 0;
+        }
 
         if (connectedAddress) {
             try {
-                if (!provider) {
-                    provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
-                }
-                const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
-                
-                // Verify ERC-721 token ownership on Ethereum Mainnet
                 const tokenOwner = await contract.ownerOf(layer.tokenId);
                 if (tokenOwner && tokenOwner.toLowerCase() === connectedAddress.toLowerCase()) {
                     isOwned = true;
                 }
             } catch (err) {
-                console.log(`Wallet does not own token ${layer.tokenId} or query skipped.`);
+                console.log(`Wallet does not own token ${layer.tokenId}`);
             }
         }
 
@@ -122,8 +111,10 @@ async function initDashboard(connectedAddress = null) {
         card.className = `layer-card ${isOwned ? 'owned' : ''}`;
         
         const variantsOptions = layer.variants.map((v, index) => 
-            `<option value="${index}">${v} (Variant ${index})</option>`
+            `<option value="${index}" ${index === activeVariantIndex ? 'selected' : ''}>${v} (Variant ${index})</option>`
         ).join('');
+
+        const activeVariantLabel = layer.variants[activeVariantIndex] || `Variant ${activeVariantIndex}`;
 
         card.innerHTML = `
             <div class="layer-header">
@@ -136,7 +127,10 @@ async function initDashboard(connectedAddress = null) {
                 ${connectedAddress ? (isOwned ? '★ Owner Verified' : 'Locked') : 'Wallet Not Connected'}
             </div>
             <div class="layer-body">
-                <label for="select-${layer.id}">Select Variant</label>
+                <div class="current-active-state">
+                    Active State: <strong>${activeVariantLabel}</strong>
+                </div>
+                <label for="select-${layer.id}">Select New Variant</label>
                 <select id="select-${layer.id}" class="layer-select" ${!isOwned ? 'disabled' : ''}>
                     ${variantsOptions}
                 </select>
@@ -172,8 +166,12 @@ async function initDashboard(connectedAddress = null) {
                     
                     await tx.wait();
                     showToast(`Successfully updated ${layer.name} to Variant ${selectedVariant}!`, 'success');
+                    
                     pubBtn.textContent = 'Publish to Blockchain';
                     pubBtn.disabled = false;
+                    
+                    // Refresh dashboard & mix tags
+                    await initDashboard(userAddress);
                 } catch (error) {
                     console.error('Transaction failed:', error);
                     showToast(error.reason || error.message || 'Transaction rejected by user.', 'error');
