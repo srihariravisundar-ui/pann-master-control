@@ -6,23 +6,23 @@ const WEB3_CONFIG = {
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
     
-    // Pure layer definitions without hardcoded active states
+    // Official 9 Layers mapped to exact On-Chain ERC-721 Token IDs (4285 - 4293)
     layers: [
-        { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
-        { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
-        { id: 2, name: "Ambience", tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
-        { id: 3, name: "Rhythm", tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
-        { id: 4, name: "Traditional", tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
-        { id: 5, name: "Voices", tokenId: 4290, variants: ["Solo", "Folk voice", "Choir"] },
-        { id: 6, name: "Guitars", tokenId: 4291, variants: ["Acoustic", "Electric"] },
-        { id: 7, name: "Keys", tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
-        { id: 8, name: "Electronic", tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live reactive layer"] }
+        { id: 0, name: "Strings", jsonId: 1, tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
+        { id: 1, name: "Winds", jsonId: 2, tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
+        { id: 2, name: "Ambience", jsonId: 3, tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
+        { id: 3, name: "Rhythm", jsonId: 4, tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
+        { id: 4, name: "Traditional", jsonId: 5, tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
+        { id: 5, name: "Voices", jsonId: 6, tokenId: 4290, variants: ["Solo", "Folk voice", "Choir"] },
+        { id: 6, name: "Guitars", jsonId: 7, tokenId: 4291, variants: ["Acoustic", "Electric"] },
+        { id: 7, name: "Keys", jsonId: 8, tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
+        { id: 8, name: "Electronic", jsonId: 9, tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live reactive layer"] }
     ],
 
     abi: [
         "function ownerOf(uint256 tokenId) view returns (address)",
         "function useControlToken(uint256 tokenId, uint256 variantId) external",
-        "function getControlToken(uint256 tokenId) view returns (uint256)"
+        "function tokenURI(uint256 tokenId) view returns (string)"
     ]
 };
 
@@ -43,20 +43,47 @@ function showToast(message, type = 'success') {
     }, 4000);
 }
 
-// Dynamically fetch active variant index for a given token from the blockchain
-async function fetchActiveVariantIndex(contract, tokenId) {
-    try {
-        const activeIndex = await contract.getControlToken(tokenId);
-        return Number(activeIndex);
-    } catch (err) {
-        console.warn(`Could not fetch live state for token ${tokenId}, defaulting to 0:`, err);
-        return 0;
+// Safely convert IPFS gateway URIs for browser fetching
+function resolveIpfsUri(uri) {
+    if (!uri) return '';
+    if (uri.startsWith('ipfs://')) {
+        return `https://cloudflare-ipfs.com/ipfs/${uri.replace('ipfs://', '')}`;
     }
+    return uri;
+}
+
+// Fetch active variant state dynamically with robust fallback
+async function fetchLayerActiveVariant(contract, layer) {
+    try {
+        const uri = await contract.tokenURI(layer.tokenId);
+        const httpUrl = resolveIpfsUri(uri);
+        
+        if (httpUrl) {
+            const res = await fetch(httpUrl);
+            const metadata = await res.json();
+            
+            // Check if metadata contains active state or variant index
+            if (metadata && typeof metadata.activeVariant !== 'undefined') {
+                return Number(metadata.activeVariant);
+            }
+            if (metadata && metadata.attributes) {
+                const variantAttr = metadata.attributes.find(attr => attr.trait_type === 'Variant' || attr.trait_type === 'State');
+                if (variantAttr && !isNaN(variantAttr.value)) {
+                    return Number(variantAttr.value);
+                }
+            }
+        }
+    } catch (err) {
+        console.warn(`Metadata fetch skipped for token ${layer.tokenId}:`, err.message);
+    }
+    
+    // Default fallback index 0 if metadata URI is restricted or unresolvable
+    return 0;
 }
 
 async function initDashboard(connectedAddress = null) {
     dashboard.innerHTML = '';
-    mixContainer.innerHTML = '<span class="mix-tag-loading">Querying live blockchain state...</span>';
+    mixContainer.innerHTML = '<span class="mix-tag-loading">Querying live blockchain states &amp; metadata...</span>';
 
     if (!provider) {
         provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
@@ -65,9 +92,9 @@ async function initDashboard(connectedAddress = null) {
 
     const liveMixStates = [];
 
-    // First pass: Fetch live state for all layers from mainnet
+    // Query mainnet state and ownership for each layer
     for (const layer of WEB3_CONFIG.layers) {
-        let activeIndex = await fetchActiveVariantIndex(contract, layer.tokenId);
+        let activeIndex = await fetchLayerActiveVariant(contract, layer);
         let isOwned = false;
 
         if (connectedAddress) {
@@ -91,7 +118,7 @@ async function initDashboard(connectedAddress = null) {
     // Render Live Mix Summary Banner
     mixContainer.innerHTML = '';
     for (const item of liveMixStates) {
-        const variantName = item.variants[item.activeIndex] || `Variant ${item.activeIndex}`;
+        const variantName = item.variants[item.activeIndex] || item.variants[0];
         const pill = document.createElement('div');
         pill.className = 'mix-pill';
         pill.innerHTML = `
@@ -110,7 +137,7 @@ async function initDashboard(connectedAddress = null) {
             `<option value="${index}" ${index === item.activeIndex ? 'selected' : ''}>${v} (Variant ${index})</option>`
         ).join('');
 
-        const activeVariantLabel = item.variants[item.activeIndex] || `Variant ${item.activeIndex}`;
+        const activeVariantLabel = item.variants[item.activeIndex] || item.variants[0];
 
         card.innerHTML = `
             <div class="layer-header">
@@ -166,7 +193,6 @@ async function initDashboard(connectedAddress = null) {
                     pubBtn.textContent = 'Publish to Blockchain';
                     pubBtn.disabled = false;
                     
-                    // Re-fetch live states from chain to reflect updates immediately
                     await initDashboard(userAddress);
                 } catch (error) {
                     console.error('Transaction failed:', error);
