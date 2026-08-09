@@ -4,22 +4,21 @@ const WEB3_CONFIG = {
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
     
-    // Complete 9 Layers mapped to exact Async Art Token IDs
-    layerTokens: {
-        "strings": 4285,
-        "winds": 4286,
-        "ambience": 4287,
-        "rhythm": 4288,
-        "traditional": 4289,
-        "voices": 4290,
-        "guitars": 4291,
-        "keys": 4292,
-        "electronic": 4293
-    },
+    // 9 Layers mapped to exact Async Art Token IDs (Iterative Array)
+    layers: [
+        { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
+        { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
+        { id: 2, name: "Ambience", tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
+        { id: 3, name: "Rhythm", tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
+        { id: 4, name: "Traditional", tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
+        { id: 5, name: "Voices", tokenId: 4290, variants: ["Solo", "Folk Voice", "Choir"] },
+        { id: 6, name: "Guitars", tokenId: 4291, variants: ["Acoustic", "Electric"] },
+        { id: 7, name: "Keys", tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
+        { id: 8, name: "Electronic", tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live Reactive Layer"] }
+    ],
 
-    // Standard Async Art V2 / ERC-1155 Hybrid ABI
+    // Async Art V2 ERC-721 & Control Token ABI
     abi: [
-        "function balanceOf(address account, uint256 id) view returns (uint256)",
         "function ownerOf(uint256 tokenId) view returns (address)",
         "function useControlToken(uint256 tokenId, uint256 variantId) external",
         "function getControlToken(uint256 tokenId) view returns (uint256)"
@@ -29,7 +28,6 @@ const WEB3_CONFIG = {
 let provider = null;
 let signer = null;
 let userAddress = null;
-let ownedTokens = {};
 
 const connectWalletBtn = document.getElementById('connect-wallet-btn');
 const dashboard = document.getElementById('layers-dashboard');
@@ -56,14 +54,13 @@ async function initDashboard(connectedAddress = null) {
                 }
                 const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
                 
-                // Check balance (ERC-1155 support)
-                const balance = await contract.balanceOf(connectedAddress, layer.tokenId);
-                if (balance > 0n) {
+                // Query ERC-721 ownerOf method
+                const tokenOwner = await contract.ownerOf(layer.tokenId);
+                if (tokenOwner && tokenOwner.toLowerCase() === connectedAddress.toLowerCase()) {
                     isOwned = true;
-                    ownedTokens[layer.tokenId] = true;
                 }
             } catch (err) {
-                console.warn(`Could not verify ownership for token ${layer.tokenId}:`, err);
+                console.log(`Wallet does not own token ${layer.tokenId} or query skipped.`);
             }
         }
 
@@ -86,7 +83,7 @@ async function initDashboard(connectedAddress = null) {
             </div>
             <div class="layer-body">
                 <label for="select-${layer.id}">Select Variant</label>
-                <select id="select-${layer.id}" class="layer-select">
+                <select id="select-${layer.id}" class="layer-select" ${!isOwned ? 'disabled' : ''}>
                     ${variantsOptions}
                 </select>
                 <button class="publish-btn" id="pub-${layer.id}" ${!isOwned ? 'disabled' : ''}>
@@ -101,34 +98,36 @@ async function initDashboard(connectedAddress = null) {
         const pubBtn = card.querySelector(`#pub-${layer.id}`);
         const selectEl = card.querySelector(`#select-${layer.id}`);
 
-        pubBtn.addEventListener('click', async () => {
-            if (!signer) {
-                showToast('Please connect your MetaMask wallet first.', 'error');
-                return;
-            }
+        if (isOwned) {
+            pubBtn.addEventListener('click', async () => {
+                if (!signer) {
+                    showToast('Please connect your MetaMask wallet first.', 'error');
+                    return;
+                }
 
-            const selectedVariant = parseInt(selectEl.value);
-            try {
-                pubBtn.disabled = true;
-                pubBtn.textContent = 'Confirming in MetaMask...';
+                const selectedVariant = parseInt(selectEl.value);
+                try {
+                    pubBtn.disabled = true;
+                    pubBtn.textContent = 'Confirming in MetaMask...';
 
-                const connectedContract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, signer);
-                const tx = await connectedContract.useControlToken(layer.tokenId, selectedVariant);
-                
-                pubBtn.textContent = 'Transaction Pending...';
-                showToast('Transaction submitted. Waiting for block confirmation...', 'success');
-                
-                await tx.wait();
-                showToast(`Successfully updated ${layer.name} to Variant ${selectedVariant}!`, 'success');
-                pubBtn.textContent = 'Publish to Blockchain';
-                pubBtn.disabled = false;
-            } catch (error) {
-                console.error('Transaction failed:', error);
-                showToast(error.reason || error.message || 'Transaction rejected by user.', 'error');
-                pubBtn.textContent = 'Publish to Blockchain';
-                pubBtn.disabled = false;
-            }
-        });
+                    const connectedContract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, signer);
+                    const tx = await connectedContract.useControlToken(layer.tokenId, selectedVariant);
+                    
+                    pubBtn.textContent = 'Transaction Pending...';
+                    showToast('Transaction submitted. Waiting for block confirmation...', 'success');
+                    
+                    await tx.wait();
+                    showToast(`Successfully updated ${layer.name} to Variant ${selectedVariant}!`, 'success');
+                    pubBtn.textContent = 'Publish to Blockchain';
+                    pubBtn.disabled = false;
+                } catch (error) {
+                    console.error('Transaction failed:', error);
+                    showToast(error.reason || error.message || 'Transaction rejected by user.', 'error');
+                    pubBtn.textContent = 'Publish to Blockchain';
+                    pubBtn.disabled = false;
+                }
+            });
+        }
     }
 }
 
@@ -141,14 +140,12 @@ connectWalletBtn.addEventListener('click', async () => {
     try {
         connectWalletBtn.textContent = 'Connecting...';
         
-        // Request account access
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         userAddress = accounts[0];
 
         provider = new ethers.BrowserProvider(window.ethereum);
-        signer = await provider.signers ? await provider.signers() : await provider.getSigner();
+        signer = await provider.getSigner();
 
-        // Check network
         const network = await provider.getNetwork();
         if (Number(network.chainId) !== WEB3_CONFIG.chainId) {
             showToast(`Please switch MetaMask to Ethereum Mainnet (Chain ID: 1)`, 'error');
@@ -171,7 +168,6 @@ connectWalletBtn.addEventListener('click', async () => {
     }
 });
 
-// Initial load without wallet connection
 window.addEventListener('DOMContentLoaded', () => {
     initDashboard(null);
 });
