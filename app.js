@@ -1,9 +1,12 @@
 const WEB3_CONFIG = {
     contractAddress: "0xb6dae651468e9593e4581705a09c10a76ac1e0c8",
+    masterTokenId: 4284,
+    masterOwner: "0x2a6a8a75037540b6a66d38459d94181896dbb2ba",
     chainId: 1, // Ethereum Mainnet
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
     
+    // Pure layer definitions without hardcoded active states
     layers: [
         { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
         { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
@@ -19,7 +22,7 @@ const WEB3_CONFIG = {
     abi: [
         "function ownerOf(uint256 tokenId) view returns (address)",
         "function useControlToken(uint256 tokenId, uint256 variantId) external",
-        "function tokenURI(uint256 tokenId) view returns (string)"
+        "function getControlToken(uint256 tokenId) view returns (uint256)"
     ]
 };
 
@@ -40,57 +43,32 @@ function showToast(message, type = 'success') {
     }, 4000);
 }
 
-async function fetchLiveMixState() {
+// Dynamically fetch active variant index for a given token from the blockchain
+async function fetchActiveVariantIndex(contract, tokenId) {
     try {
-        if (!provider) {
-            provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
-        }
-        const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
-        
-        mixContainer.innerHTML = '';
-        
-        for (const layer of WEB3_CONFIG.layers) {
-            let activeVariantIndex = 0;
-            
-            // Attempt to read token URI or metadata state if available, 
-            // otherwise fallback gracefully without forcing incorrect 0s if unreadable
-            try {
-                // Async Art stores metadata or state representation which can be parsed or queried.
-                // If direct state view is restricted on proxy, we default cleanly or inspect tokenURI.
-                const uri = await contract.tokenURI(layer.tokenId);
-                // Placeholder parsing logic if tokenURI contains state data, else default to 0
-            } catch (e) {
-                activeVariantIndex = 0;
-            }
-
-            const variantName = layer.variants[activeVariantIndex] || `Variant ${activeVariantIndex}`;
-            
-            const pill = document.createElement('div');
-            pill.className = 'mix-pill';
-            pill.innerHTML = `
-                <span class="stem-name">${layer.name}:</span>
-                <span class="stem-variant">${variantName}</span>
-            `;
-            mixContainer.appendChild(pill);
-        }
+        const activeIndex = await contract.getControlToken(tokenId);
+        return Number(activeIndex);
     } catch (err) {
-        console.warn('Could not fetch live mix state:', err);
-        mixContainer.innerHTML = '<span class="mix-tag-loading">Live mix status initialized. Connect wallet to govern layers.</span>';
+        console.warn(`Could not fetch live state for token ${tokenId}, defaulting to 0:`, err);
+        return 0;
     }
 }
 
 async function initDashboard(connectedAddress = null) {
     dashboard.innerHTML = '';
-    await fetchLiveMixState();
+    mixContainer.innerHTML = '<span class="mix-tag-loading">Querying live blockchain state...</span>';
 
     if (!provider) {
         provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
     }
     const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
 
+    const liveMixStates = [];
+
+    // First pass: Fetch live state for all layers from mainnet
     for (const layer of WEB3_CONFIG.layers) {
+        let activeIndex = await fetchActiveVariantIndex(contract, layer.tokenId);
         let isOwned = false;
-        let activeVariantIndex = 0;
 
         if (connectedAddress) {
             try {
@@ -98,40 +76,62 @@ async function initDashboard(connectedAddress = null) {
                 if (tokenOwner && tokenOwner.toLowerCase() === connectedAddress.toLowerCase()) {
                     isOwned = true;
                 }
-            } catch (err) {
+            } catch (e) {
                 console.log(`Wallet does not own token ${layer.tokenId}`);
             }
         }
 
+        liveMixStates.push({
+            ...layer,
+            activeIndex,
+            isOwned
+        });
+    }
+
+    // Render Live Mix Summary Banner
+    mixContainer.innerHTML = '';
+    for (const item of liveMixStates) {
+        const variantName = item.variants[item.activeIndex] || `Variant ${item.activeIndex}`;
+        const pill = document.createElement('div');
+        pill.className = 'mix-pill';
+        pill.innerHTML = `
+            <span class="stem-name">${item.name}:</span>
+            <span class="stem-variant">${variantName}</span>
+        `;
+        mixContainer.appendChild(pill);
+    }
+
+    // Render Layer Cards
+    for (const item of liveMixStates) {
         const card = document.createElement('div');
-        card.className = `layer-card ${isOwned ? 'owned' : ''}`;
+        card.className = `layer-card ${item.isOwned ? 'owned' : ''}`;
         
-        const variantsOptions = layer.variants.map((v, index) => 
-            `<option value="${index}" ${index === activeVariantIndex ? 'selected' : ''}>${v} (Variant ${index})</option>`
+        const variantsOptions = item.variants.map((v, index) => 
+            `<option value="${index}" ${index === item.activeIndex ? 'selected' : ''}>${v} (Variant ${index})</option>`
         ).join('');
 
-        const activeVariantLabel = layer.variants[activeVariantIndex] || `Variant ${activeVariantIndex}`;
+        const activeVariantLabel = item.variants[item.activeIndex] || `Variant ${item.activeIndex}`;
 
         card.innerHTML = `
             <div class="layer-header">
                 <div class="layer-title">
-                    <h3>${layer.name}</h3>
+                    <h3>${item.name}</h3>
                 </div>
-                <span class="token-id">Token #${layer.tokenId}</span>
+                <span class="token-id">Token #${item.tokenId}</span>
             </div>
             <div class="ownership-badge">
-                ${connectedAddress ? (isOwned ? '★ Owner Verified' : 'Locked') : 'Wallet Not Connected'}
+                ${connectedAddress ? (item.isOwned ? '★ Owner Verified' : 'Locked') : 'Wallet Not Connected'}
             </div>
             <div class="layer-body">
                 <div class="current-active-state">
                     Active State: <strong>${activeVariantLabel}</strong>
                 </div>
-                <label for="select-${layer.id}">Select New Variant</label>
-                <select id="select-${layer.id}" class="layer-select" ${!isOwned ? 'disabled' : ''}>
+                <label for="select-${item.id}">Select New Variant</label>
+                <select id="select-${item.id}" class="layer-select" ${!item.isOwned ? 'disabled' : ''}>
                     ${variantsOptions}
                 </select>
-                <button class="publish-btn" id="pub-${layer.id}" ${!isOwned ? 'disabled' : ''}>
-                    ${isOwned ? 'Publish to Blockchain' : 'Locked (Not Owner)'}
+                <button class="publish-btn" id="pub-${item.id}" ${!item.isOwned ? 'disabled' : ''}>
+                    ${item.isOwned ? 'Publish to Blockchain' : 'Locked (Not Owner)'}
                 </button>
             </div>
         `;
@@ -139,10 +139,10 @@ async function initDashboard(connectedAddress = null) {
         dashboard.appendChild(card);
 
         // Bind Publish Event for verified owners
-        const pubBtn = card.querySelector(`#pub-${layer.id}`);
-        const selectEl = card.querySelector(`#select-${layer.id}`);
+        const pubBtn = card.querySelector(`#pub-${item.id}`);
+        const selectEl = card.querySelector(`#select-${item.id}`);
 
-        if (isOwned) {
+        if (item.isOwned) {
             pubBtn.addEventListener('click', async () => {
                 if (!signer) {
                     showToast('Please connect your MetaMask wallet first.', 'error');
@@ -155,17 +155,18 @@ async function initDashboard(connectedAddress = null) {
                     pubBtn.textContent = 'Confirming in MetaMask...';
 
                     const connectedContract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, signer);
-                    const tx = await connectedContract.useControlToken(layer.tokenId, selectedVariant);
+                    const tx = await connectedContract.useControlToken(item.tokenId, selectedVariant);
                     
                     pubBtn.textContent = 'Transaction Pending...';
                     showToast('Transaction submitted. Waiting for block confirmation...', 'success');
                     
                     await tx.wait();
-                    showToast(`Successfully updated ${layer.name} to Variant ${selectedVariant}!`, 'success');
+                    showToast(`Successfully updated ${item.name} to Variant ${selectedVariant}!`, 'success');
                     
                     pubBtn.textContent = 'Publish to Blockchain';
                     pubBtn.disabled = false;
                     
+                    // Re-fetch live states from chain to reflect updates immediately
                     await initDashboard(userAddress);
                 } catch (error) {
                     console.error('Transaction failed:', error);
