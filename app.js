@@ -4,17 +4,71 @@ const WEB3_CONFIG = {
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
     
-    // 9 Layers mapped to exact Async Art Token IDs (Iterative Array)
+    // Official 9 Layers mapped directly from Pradeep Kumar's Async Art JSON metadata
     layers: [
-        { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
-        { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
-        { id: 2, name: "Ambience", tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
-        { id: 3, name: "Rhythm", tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
-        { id: 4, name: "Traditional", tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
-        { id: 5, name: "Voices", tokenId: 4290, variants: ["Solo", "Folk Voice", "Choir"] },
-        { id: 6, name: "Guitars", tokenId: 4291, variants: ["Acoustic", "Electric"] },
-        { id: 7, name: "Keys", tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
-        { id: 8, name: "Electronic", tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live Reactive Layer"] }
+        { 
+            id: 0, 
+            name: "Strings", 
+            jsonId: 1, 
+            tokenId: 4285, 
+            variants: ["Bright", "Dark", "Ambient"] 
+        },
+        { 
+            id: 1, 
+            name: "Winds", 
+            jsonId: 2, 
+            tokenId: 4286, 
+            variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] 
+        },
+        { 
+            id: 2, 
+            name: "Ambience", 
+            jsonId: 3, 
+            tokenId: 4287, 
+            variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] 
+        },
+        { 
+            id: 3, 
+            name: "Rhythm", 
+            jsonId: 4, 
+            tokenId: 4288, 
+            variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] 
+        },
+        { 
+            id: 4, 
+            name: "Traditional", 
+            jsonId: 5, 
+            tokenId: 4289, 
+            variants: ["Sarangi", "Veena", "Slide Guitar - Live"] 
+        },
+        { 
+            id: 5, 
+            name: "Voices", 
+            jsonId: 6, 
+            tokenId: 4290, 
+            variants: ["Solo", "Folk voice", "Choir"] 
+        },
+        { 
+            id: 6, 
+            name: "Guitars", 
+            jsonId: 7, 
+            tokenId: 4291, 
+            variants: ["Acoustic", "Electric"] 
+        },
+        { 
+            id: 7, 
+            name: "Keys", 
+            jsonId: 8, 
+            tokenId: 4292, 
+            variants: ["Piano", "Mallet - Live"] 
+        },
+        { 
+            id: 8, 
+            name: "Electronic", 
+            jsonId: 9, 
+            tokenId: 4293, 
+            variants: ["Synth & Bass", "Modular", "Live reactive layer"] 
+        }
     ],
 
     // Async Art V2 ERC-721 & Control Token ABI
@@ -54,7 +108,7 @@ async function initDashboard(connectedAddress = null) {
                 }
                 const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
                 
-                // Query ERC-721 ownerOf method
+                // Verify ERC-721 token ownership on Ethereum Mainnet
                 const tokenOwner = await contract.ownerOf(layer.tokenId);
                 if (tokenOwner && tokenOwner.toLowerCase() === connectedAddress.toLowerCase()) {
                     isOwned = true;
@@ -94,7 +148,7 @@ async function initDashboard(connectedAddress = null) {
 
         dashboard.appendChild(card);
 
-        // Bind Publish Event
+        // Bind Publish Event for verified owners
         const pubBtn = card.querySelector(`#pub-${layer.id}`);
         const selectEl = card.querySelector(`#select-${layer.id}`);
 
