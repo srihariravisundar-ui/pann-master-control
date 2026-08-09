@@ -21,15 +21,22 @@
 
         <main class="main-content">
             <section class="info-banner">
-                <h2>On-Chain Layer Control</h2>
-                <p>Connect your MetaMask wallet to verify ownership of Pann layer tokens (IDs 4285–4293) and publish state mutations directly to the Ethereum Mainnet contract.</p>
+                <h2>Live On-Chain Composition &amp; Control</h2>
+                <p>Inspecting active smart contract states for Pann. Connect your MetaMask wallet to verify layer ownership and publish new variant updates directly to the Ethereum Mainnet.</p>
                 <div class="contract-info">
-                    <span>Contract: <strong id="contract-address-display">0x96be3dfdf788b7078ef7514e076ccfd33acfd7cd</strong></span>
+                    <span>Contract: <strong id="contract-address-display">0xb6dae651468e9593e4581705a09c10a76ac1e0c8</strong></span>
+                </div>
+            </section>
+
+            <section class="live-mix-summary">
+                <h3>Current Active On-Chain Mix</h3>
+                <div id="mix-tags-container" class="mix-tags-grid">
+                    <span class="mix-tag-loading">Fetching live blockchain state...</span>
                 </div>
             </section>
 
             <section id="layers-dashboard" class="dashboard-grid">
-                <div class="loading-state">Connect wallet to inspect layer ownership...</div>
+                <div class="loading-state">Loading layer dashboard...</div>
             </section>
         </main>
 
