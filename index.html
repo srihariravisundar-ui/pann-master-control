@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pann — Master & Layer State Governance</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="brand">
+               <h1>Pann</h1>
+               <p>Master & Layer State Governance Panel</p>
+            </div>
+            <div class="wallet-control">
+                <button id="connect-wallet-btn" class="btn primary-btn">Connect Wallet</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="info-banner">
+                <h2>On-Chain Layer Control</h2>
+                <p>Connect your MetaMask wallet to verify ownership of Pann layer tokens (IDs 4285–4293) and publish state mutations directly to the Ethereum Mainnet contract.</p>
+                <div class="contract-info">
+                    <span>Contract: <strong id="contract-address-display">0x96be3dfdf788b7078ef7514e076ccfd33acfd7cd</strong></span>
+                </div>
+            </section>
+
+            <section id="layers-dashboard" class="dashboard-grid">
+                <div class="loading-state">Connect wallet to inspect layer ownership...</div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Pann Master Control Panel &bull; Powered by Ethers.js &amp; Ethereum</p>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
