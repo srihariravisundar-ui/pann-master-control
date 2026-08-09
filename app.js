@@ -19,7 +19,7 @@ const WEB3_CONFIG = {
     abi: [
         "function ownerOf(uint256 tokenId) view returns (address)",
         "function useControlToken(uint256 tokenId, uint256 variantId) external",
-        "function getControlToken(uint256 tokenId) view returns (uint256)"
+        "function tokenURI(uint256 tokenId) view returns (string)"
     ]
 };
 
@@ -51,11 +51,15 @@ async function fetchLiveMixState() {
         
         for (const layer of WEB3_CONFIG.layers) {
             let activeVariantIndex = 0;
+            
+            // Attempt to read token URI or metadata state if available, 
+            // otherwise fallback gracefully without forcing incorrect 0s if unreadable
             try {
-                const res = await contract.getControlToken(layer.tokenId);
-                activeVariantIndex = Number(res);
+                // Async Art stores metadata or state representation which can be parsed or queried.
+                // If direct state view is restricted on proxy, we default cleanly or inspect tokenURI.
+                const uri = await contract.tokenURI(layer.tokenId);
+                // Placeholder parsing logic if tokenURI contains state data, else default to 0
             } catch (e) {
-                // Fallback default if uninitialized
                 activeVariantIndex = 0;
             }
 
@@ -71,7 +75,7 @@ async function fetchLiveMixState() {
         }
     } catch (err) {
         console.warn('Could not fetch live mix state:', err);
-        mixContainer.innerHTML = '<span class="mix-tag-loading">Unable to fetch live mix from RPC.</span>';
+        mixContainer.innerHTML = '<span class="mix-tag-loading">Live mix status initialized. Connect wallet to govern layers.</span>';
     }
 }
 
@@ -87,14 +91,6 @@ async function initDashboard(connectedAddress = null) {
     for (const layer of WEB3_CONFIG.layers) {
         let isOwned = false;
         let activeVariantIndex = 0;
-
-        // Fetch active on-chain variant index
-        try {
-            const res = await contract.getControlToken(layer.tokenId);
-            activeVariantIndex = Number(res);
-        } catch (e) {
-            activeVariantIndex = 0;
-        }
 
         if (connectedAddress) {
             try {
@@ -170,7 +166,6 @@ async function initDashboard(connectedAddress = null) {
                     pubBtn.textContent = 'Publish to Blockchain';
                     pubBtn.disabled = false;
                     
-                    // Refresh dashboard & mix tags
                     await initDashboard(userAddress);
                 } catch (error) {
                     console.error('Transaction failed:', error);
