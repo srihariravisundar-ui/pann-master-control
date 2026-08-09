@@ -1,21 +1,23 @@
 const WEB3_CONFIG = {
-    contractAddress: "0x96be3dfdf788b7078ef7514e076ccfd33acfd7cd",
+    contractAddress: "0xb6dae651468e9593e4581705a09c10a76ac1e0c8",
     chainId: 1, // Ethereum Mainnet
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
-    // 9 Layers with exact Token IDs and variants
-    layers: [
-        { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
-        { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
-        { id: 2, name: "Ambience", tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
-        { id: 3, name: "Rhythm", tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
-        { id: 4, name: "Traditional", tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
-        { id: 5, name: "Voices", tokenId: 4290, variants: ["Solo", "Folk Voice", "Choir"] },
-        { id: 6, name: "Guitars", tokenId: 4291, variants: ["Acoustic", "Electric"] },
-        { id: 7, name: "Keys", tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
-        { id: 8, name: "Electronic", tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live Reactive Layer"] }
-    ],
-    // Standard ERC-1155 / ERC-721 Hybrid ABI compatible with Async Art contracts
+    
+    // Complete 9 Layers mapped to exact Async Art Token IDs
+    layerTokens: {
+        "strings": 4285,
+        "winds": 4286,
+        "ambience": 4287,
+        "rhythm": 4288,
+        "traditional": 4289,
+        "voices": 4290,
+        "guitars": 4291,
+        "keys": 4292,
+        "electronic": 4293
+    },
+
+    // Standard Async Art V2 / ERC-1155 Hybrid ABI
     abi: [
         "function balanceOf(address account, uint256 id) view returns (uint256)",
         "function ownerOf(uint256 tokenId) view returns (address)",
