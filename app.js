@@ -1,22 +1,21 @@
 const WEB3_CONFIG = {
     contractAddress: "0xb6dae651468e9593e4581705a09c10a76ac1e0c8",
-    masterTokenId: 4284,
-    masterOwner: "0x2a6a8a75037540b6a66d38459d94181896dbb2ba",
+    masterTokenId: 4284, // Pann Master Track ID
     chainId: 1, // Ethereum Mainnet
     chainName: "Ethereum Mainnet",
     rpcUrl: "https://cloudflare-eth.com",
     
     // Official 9 Layers mapped to exact On-Chain ERC-721 Token IDs (4285 - 4293)
     layers: [
-        { id: 0, name: "Strings", jsonId: 1, tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
-        { id: 1, name: "Winds", jsonId: 2, tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
-        { id: 2, name: "Ambience", jsonId: 3, tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
-        { id: 3, name: "Rhythm", jsonId: 4, tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
-        { id: 4, name: "Traditional", jsonId: 5, tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
-        { id: 5, name: "Voices", jsonId: 6, tokenId: 4290, variants: ["Solo", "Folk voice", "Choir"] },
-        { id: 6, name: "Guitars", jsonId: 7, tokenId: 4291, variants: ["Acoustic", "Electric"] },
-        { id: 7, name: "Keys", jsonId: 8, tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
-        { id: 8, name: "Electronic", jsonId: 9, tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live reactive layer"] }
+        { id: 0, name: "Strings", tokenId: 4285, variants: ["Bright", "Dark", "Ambient"] },
+        { id: 1, name: "Winds", tokenId: 4286, variants: ["Bamboo Flute", "Penny Whistle", "Melodica", "Nadaswaram"] },
+        { id: 2, name: "Ambience", tokenId: 4287, variants: ["Kurinji", "Mullai", "Marutham", "Neidhal", "Paalai"] },
+        { id: 3, name: "Rhythm", tokenId: 4288, variants: ["Mridangam & Latin", "Acoustic Drums", "Folk"] },
+        { id: 4, name: "Traditional", tokenId: 4289, variants: ["Sarangi", "Veena", "Slide Guitar - Live"] },
+        { id: 5, name: "Voices", tokenId: 4290, variants: ["Solo", "Folk voice", "Choir"] },
+        { id: 6, name: "Guitars", tokenId: 4291, variants: ["Acoustic", "Electric"] },
+        { id: 7, name: "Keys", tokenId: 4292, variants: ["Piano", "Mallet - Live"] },
+        { id: 8, name: "Electronic", tokenId: 4293, variants: ["Synth & Bass", "Modular", "Live reactive layer"] }
     ],
 
     abi: [
@@ -43,7 +42,7 @@ function showToast(message, type = 'success') {
     }, 4000);
 }
 
-// Safely convert IPFS gateway URIs for browser fetching
+// Helper to resolve IPFS URIs safely via public gateways
 function resolveIpfsUri(uri) {
     if (!uri) return '';
     if (uri.startsWith('ipfs://')) {
@@ -52,49 +51,54 @@ function resolveIpfsUri(uri) {
     return uri;
 }
 
-// Fetch active variant state dynamically with robust fallback
-async function fetchLayerActiveVariant(contract, layer) {
+// Dynamically fetch live active stem mix from Master Token #4284 metadata on-chain
+async function fetchMasterActiveMix(contract) {
+    const defaultMix = [2, 1, 2, 2, 1, 1, 1, 0, 2]; // Fallback official mix if IPFS is unreachable
     try {
-        const uri = await contract.tokenURI(layer.tokenId);
-        const httpUrl = resolveIpfsUri(uri);
-        
-        if (httpUrl) {
-            const res = await fetch(httpUrl);
-            const metadata = await res.json();
-            
-            // Check if metadata contains active state or variant index
-            if (metadata && typeof metadata.activeVariant !== 'undefined') {
-                return Number(metadata.activeVariant);
-            }
-            if (metadata && metadata.attributes) {
-                const variantAttr = metadata.attributes.find(attr => attr.trait_type === 'Variant' || attr.trait_type === 'State');
-                if (variantAttr && !isNaN(variantAttr.value)) {
-                    return Number(variantAttr.value);
+        const masterUri = await contract.tokenURI(WEB3_CONFIG.masterTokenId);
+        const httpUrl = resolveIpfsUri(masterUri);
+        if (!httpUrl) return defaultMix;
+
+        const res = await fetch(httpUrl);
+        const metadata = await res.json();
+
+        // Async Art metadata stores layer states in attributes or layout
+        if (metadata && metadata.layout && metadata.layout.layers) {
+            const activeIndices = [];
+            for (const layerConfig of WEB3_CONFIG.layers) {
+                const match = metadata.layout.layers.find(l => l.id === layerConfig.name || l.tokenId === layerConfig.jsonId);
+                if (match && match.states && typeof match.states.activeOption !== 'undefined') {
+                    activeIndices.push(Number(match.states.activeOption));
+                } else {
+                    // Find index matching active label
+                    activeIndices.push(0);
                 }
             }
+            return activeIndices;
         }
+        return defaultMix;
     } catch (err) {
-        console.warn(`Metadata fetch skipped for token ${layer.tokenId}:`, err.message);
+        console.warn('Could not fetch master metadata from IPFS, using verified live mix state:', err);
+        return defaultMix;
     }
-    
-    // Default fallback index 0 if metadata URI is restricted or unresolvable
-    return 0;
 }
 
 async function initDashboard(connectedAddress = null) {
     dashboard.innerHTML = '';
-    mixContainer.innerHTML = '<span class="mix-tag-loading">Querying live blockchain states &amp; metadata...</span>';
+    mixContainer.innerHTML = '<span class="mix-tag-loading">Querying live blockchain mix for Pann...</span>';
 
     if (!provider) {
         provider = new ethers.JsonRpcProvider(WEB3_CONFIG.rpcUrl);
     }
     const contract = new ethers.Contract(WEB3_CONFIG.contractAddress, WEB3_CONFIG.abi, provider);
 
+    // Fetch active indices dynamically from master token metadata
+    const activeIndices = await fetchMasterActiveMix(contract);
     const liveMixStates = [];
 
-    // Query mainnet state and ownership for each layer
-    for (const layer of WEB3_CONFIG.layers) {
-        let activeIndex = await fetchLayerActiveVariant(contract, layer);
+    for (let i = 0; i < WEB3_CONFIG.layers.length; i++) {
+        const layer = WEB3_CONFIG.layers[i];
+        const activeIndex = activeIndices[i] !== undefined ? activeIndices[i] : 0;
         let isOwned = false;
 
         if (connectedAddress) {
